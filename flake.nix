@@ -22,18 +22,45 @@
         default = pkgs.mkShell {
           nativeBuildInputs = [
             pkgs.fzf
-            pkgs.hurl
             pkgs.just
-            pkgs.bacon
-            pkgs.httpie
+            pkgs.hurl
+            pkgs.elm2nix
+            pkgs.watchexec
             pkgs.rust-analyzer
             pkgs.elmPackages.elm
-            pkgs.elmPackages.elm-land
             pkgs.elmPackages.elm-format
             pkgs.rust-bin.stable.latest.default
+            pkgs.elmPackages.elm-language-server
+
+            (pkgs.writeShellApplication {
+              name = "run";
+              text = "watchexec -r just run";
+            })
           ];
         };
       });
+
+      packages = forAllSystems (pkgs:
+        let
+          ui = pkgs.callPackage ./ui/default.nix { };
+
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = pkgs.rust-bin.stable.latest.default;
+            rustc = pkgs.rust-bin.stable.latest.default;
+          };
+        in {
+          default = rustPlatform.buildRustPackage {
+            pname = "octopod";
+            version = "0.1.0";
+            src = ./.;
+
+            preBuild = ''
+              cp ${ui}/Main.js ui/Main.js
+            '';
+
+            cargoLock.lockFile = ./Cargo.lock;
+          };
+        });
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt-classic);
     };

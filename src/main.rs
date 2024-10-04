@@ -50,13 +50,10 @@ async fn main() -> color_eyre::Result<()> {
         .init();
 
     let args = Arguments::parse();
-    dbg!(&args);
 
-    let index_html = statics::get_index_html()?;
-    let homepage = statics::homepage(index_html);
-    let static_files = statics::routes();
-
-    let routes = static_files.or(homepage);
+    let routes = statics::main_js()
+        .or(statics::files())
+        .or(statics::index_html());
 
     let address = args.address.parse::<std::net::SocketAddr>()?;
     warp::serve(routes).run(address).await;
@@ -67,7 +64,6 @@ async fn main() -> color_eyre::Result<()> {
 mod statics {
     use std::path::Path;
 
-    use color_eyre::eyre::OptionExt;
     use include_dir::{include_dir, Dir};
     use warp::{
         http::{
@@ -77,7 +73,31 @@ mod statics {
         Filter,
     };
 
-    static STATIC_DIR: Dir = include_dir!("ui/dist");
+    pub fn index_html(
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+        const INDEX_HTML: &str = include_str!("../ui/index.html");
+
+        warp::get().map(|| {
+            Response::builder()
+                .header(CONTENT_TYPE, "text/html")
+                .body(INDEX_HTML)
+                .unwrap()
+        })
+    }
+
+    pub fn main_js() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
+    {
+        const MAIN_JS: &str = include_str!("../ui/Main.js");
+
+        warp::path!("Main.js").map(|| {
+            Response::builder()
+                .header(CONTENT_TYPE, "text/javascript")
+                .body(MAIN_JS)
+                .unwrap()
+        })
+    }
+
+    static STATIC_DIR: Dir = include_dir!("statics");
 
     async fn send_file(path: warp::path::Tail) -> Result<impl warp::Reply, warp::Rejection> {
         let path = Path::new(path.as_str());
@@ -102,31 +122,10 @@ mod statics {
         Ok(resp)
     }
 
-    pub fn get_index_html() -> color_eyre::Result<String> {
-        let file = STATIC_DIR
-            .get_file("index.html")
-            .ok_or_eyre("could not find index.html")?;
-
-        Ok(file
-            .contents_utf8()
-            .ok_or_eyre("contents of index.html is not utf-8")?
-            .to_owned())
-    }
-
-    pub fn homepage(
-        file: String,
-    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    pub fn files() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
         warp::get()
-            .and(warp::any().map(move || file.clone()))
-            .map(|file| {
-                Response::builder()
-                    .header(CONTENT_TYPE, "text/html")
-                    .body(file)
-                    .unwrap()
-            })
-    }
-
-    pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-        warp::path::tail().and_then(send_file)
+            .and(warp::path::path("statics"))
+            .and(warp::path::tail())
+            .and_then(send_file)
     }
 }
