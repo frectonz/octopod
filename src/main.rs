@@ -1,19 +1,20 @@
 use clap::Parser;
+use fetcher::Fetcher;
 use warp::Filter;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Arguments {
     /// The address to bind to.
-    #[arg(long, default_value = "127.0.0.1:3030")]
+    #[arg(long, env, default_value = "127.0.0.1:3030")]
     address: String,
 
     /// Registry URL to connect to. Example [http://127.0.0.1:3030]
-    #[arg(long)]
+    #[arg(long, env)]
     registry_url: String,
 
     /// Registry username and password separated with a colon. Example [username:password]
-    #[arg(long)]
+    #[arg(long, env)]
     registry_credentials: Option<Credentials>,
 }
 
@@ -51,8 +52,12 @@ async fn main() -> color_eyre::Result<()> {
 
     let args = Arguments::parse();
 
+    let fetcher = Fetcher::new(args.registry_url, args.registry_credentials);
+    fetcher.check_auth().await?;
+
     let routes = statics::main_js()
         .or(statics::files())
+        .or(api::hander(fetcher))
         .or(statics::index_html());
 
     let address = args.address.parse::<std::net::SocketAddr>()?;
@@ -127,5 +132,87 @@ mod statics {
             .and(warp::path::path("statics"))
             .and(warp::path::tail())
             .and_then(send_file)
+    }
+}
+
+mod fetcher {
+    use reqwest::Client;
+
+    use crate::Credentials;
+
+    #[derive(Clone)]
+    pub struct Fetcher {
+        client: Client,
+        url: String,
+        auth: Option<Credentials>,
+    }
+
+    impl Fetcher {
+        pub fn new(url: String, auth: Option<Credentials>) -> Self {
+            Self {
+                client: Client::new(),
+                url,
+                auth,
+            }
+        }
+
+        pub async fn fetch(&self, url: &str) -> color_eyre::Result<serde_json::Value> {
+            let req = self.client.get(format!("{}/{url}", self.url));
+
+            let resp = match &self.auth {
+                Some(Credentials { username, password }) => {
+                    req.basic_auth(username, Some(password))
+                }
+                None => req,
+            }
+            .send()
+            .await?
+            .json()
+            .await?;
+
+            Ok(resp)
+        }
+
+        pub async fn check_auth(&self) -> color_eyre::Result<()> {
+            let resp = self.fetch("v2").await?;
+
+            if resp == serde_json::json!({}) {
+                tracing::info!("registry connection check succeeded");
+                Ok(())
+            } else {
+                color_eyre::eyre::bail!("registry connection check failed")
+            }
+        }
+    }
+}
+
+mod api {
+    use warp::Filter;
+
+    use crate::fetcher::Fetcher;
+
+    async fn send_request(
+        fetcher: Fetcher,
+        path: warp::path::Tail,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        match fetcher.fetch(path.as_str()).await {
+            Ok(json) => Ok(warp::reply::json(&json)),
+            Err(error) => {
+                tracing::error!(
+                    "encountered an error sending request to server: {path:?} {error:?}"
+                );
+                Err(warp::reject())
+            }
+        }
+    }
+
+    pub fn hander(
+        fetcher: Fetcher,
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::path::path("api"))
+            .and(warp::any().map(move || fetcher.clone()))
+            .and(warp::path::tail())
+            .and_then(send_request)
     }
 }
