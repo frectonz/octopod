@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Browser
 import Browser.Navigation as Nav
+import Filesize
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
@@ -47,11 +48,13 @@ type alias Metadata =
 type Route
     = Index
     | Repo (Maybe String)
+    | Tag (Maybe String) (Maybe String)
 
 
 type Page
     = HomePage (RemoteData Catalog)
     | SingleRepoPage String (RemoteData Repository)
+    | ImagePage String (RemoteData Image)
 
 
 type RemoteData value
@@ -71,11 +74,26 @@ type alias Repository =
     }
 
 
+type alias Image =
+    { config : ImageDigest
+    , layers : List ImageDigest
+    , mediaType : String
+    , schemaVersion : Int
+    }
+
+
+type alias ImageDigest =
+    { digest : String
+    , mediaType : String
+    , size : Int
+    }
+
+
 init : Metadata -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init meta url key =
     let
         route =
-            parseUrl url
+            parseUrl url |> Debug.log "route"
     in
     ( { key = key
       , meta = meta
@@ -84,21 +102,27 @@ init meta url key =
                 Index ->
                     HomePage Loading
 
-                Repo Nothing ->
-                    HomePage Loading
-
                 Repo (Just name) ->
                     SingleRepoPage name Loading
+
+                Tag (Just repo) (Just tag) ->
+                    ImagePage (repo ++ ":" ++ tag) Loading
+
+                _ ->
+                    HomePage Loading
       }
     , case route of
         Index ->
             getCatalog
 
-        Repo Nothing ->
-            getCatalog
-
         Repo (Just name) ->
             getRepo name
+
+        Tag (Just repo) (Just tag) ->
+            getImage repo tag
+
+        _ ->
+            getCatalog
     )
 
 
@@ -111,6 +135,7 @@ type Msg
     | UrlChanged Url.Url
     | GotCatalog (Result Http.Error Catalog)
     | GotRepository (Result Http.Error Repository)
+    | GotImage (Result Http.Error Image)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -141,6 +166,9 @@ update msg model =
                         ( Repo _, SingleRepoPage _ _ ) ->
                             False
 
+                        ( Tag _ _, ImagePage _ _ ) ->
+                            False
+
                         _ ->
                             True
             in
@@ -165,6 +193,14 @@ update msg model =
 
                 Err _ ->
                     ( { model | page = SingleRepoPage name Failure }, Cmd.none )
+
+        ( GotImage result, ImagePage name _ ) ->
+            case result of
+                Ok image ->
+                    ( { model | page = ImagePage name (Success image) }, Cmd.none )
+
+                Err _ ->
+                    ( { model | page = ImagePage name Failure }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -201,6 +237,9 @@ view model =
                 SingleRepoPage _ (Success repo) ->
                     "Found " ++ (repo.tags |> List.length |> String.fromInt) ++ pluralize " tag" " tags" (repo.tags |> List.length)
 
+                ImagePage _ (Success image) ->
+                    "Found " ++ (image.layers |> List.length |> String.fromInt) ++ pluralize " layer" " layers" (image.layers |> List.length)
+
                 _ ->
                     ""
     in
@@ -215,6 +254,9 @@ view model =
 
                     SingleRepoPage name data ->
                         viewSingleRepoPage name data
+
+                    ImagePage name data ->
+                        viewImagePage name data
                )
     }
 
@@ -302,10 +344,57 @@ viewRepoDetails data =
                     (\tag ->
                         section [ class "repo" ]
                             [ div [] [ img [ src "/statics/tag.svg" ] [] ]
-                            , div [] [ h1 [] [ a [ href "" ] [ text tag ] ] ]
+                            , div [] [ h1 [] [ a [ href ("/tags?r=" ++ repo.name ++ "&t=" ++ tag) ] [ text tag ] ] ]
                             , div [] [ img [ src "/statics/move-up-right.svg" ] [] ]
                             ]
                     )
+
+
+viewImagePage : String -> RemoteData Image -> List (Html msg)
+viewImagePage name data =
+    viewPageTitle name
+        :: viewImageDetail data
+
+
+viewImageDetail : RemoteData Image -> List (Html msg)
+viewImageDetail data =
+    case data of
+        Loading ->
+            [ section [ class "loading__title" ] [ h1 [] [ text "Loading..." ] ] ]
+
+        Failure ->
+            [ section [ class "failure__title" ] [ h1 [] [ text "Something went wrong" ] ] ]
+
+        Success image ->
+            let
+                size =
+                    (image.layers |> List.map (\l -> l.size) |> List.sum) + image.config.size
+            in
+            [ section [ class "image" ]
+                [ div [ class "layers" ]
+                    (h2 [ class "layers__title" ] [ text "Layers" ]
+                        :: (image.layers
+                                |> List.map
+                                    (\layer ->
+                                        div []
+                                            [ p [] [ text layer.digest ]
+                                            , p [] [ layer.size |> Filesize.format |> text ]
+                                            ]
+                                    )
+                           )
+                    )
+                , div [ class "metadata" ]
+                    [ div []
+                        [ h2 [] [ text "Image Digest" ]
+                        , p [] [ text image.config.digest ]
+                        ]
+                    , div []
+                        [ h2 [] [ text "Image Size" ]
+                        , p [] [ size |> Filesize.format |> text ]
+                        ]
+                    ]
+                ]
+            ]
 
 
 
@@ -341,6 +430,31 @@ decodeRepo =
         (Decode.field "tags" (Decode.list Decode.string))
 
 
+getImage : String -> String -> Cmd Msg
+getImage repo tag =
+    Http.get
+        { url = "/api/v2/" ++ repo ++ "/manifests/" ++ tag
+        , expect = Http.expectJson GotImage decodeImage
+        }
+
+
+decodeImage : Decoder Image
+decodeImage =
+    Decode.map4 Image
+        (Decode.field "config" decodeImageDigest)
+        (Decode.field "layers" (Decode.list decodeImageDigest))
+        (Decode.field "mediaType" Decode.string)
+        (Decode.field "schemaVersion" Decode.int)
+
+
+decodeImageDigest : Decoder ImageDigest
+decodeImageDigest =
+    Decode.map3 ImageDigest
+        (Decode.field "digest" Decode.string)
+        (Decode.field "mediaType" Decode.string)
+        (Decode.field "size" Decode.int)
+
+
 
 -- ROUTES
 
@@ -360,4 +474,5 @@ routeParser =
     Parser.oneOf
         [ Parser.map Index Parser.top
         , Parser.map Repo (Parser.s "repos" <?> Query.string "r")
+        , Parser.map Tag (Parser.s "tags" <?> Query.string "r" <?> Query.string "t")
         ]
