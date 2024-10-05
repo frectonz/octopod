@@ -93,7 +93,7 @@ init : Metadata -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init meta url key =
     let
         route =
-            parseUrl url |> Debug.log "route"
+            parseUrl url
     in
     ( { key = key
       , meta = meta
