@@ -127,12 +127,13 @@ jobs:
           path: target/distrib/
           merge-multiple: true
 
-      - name: Build Elm UI
-        run: cd ui; elm make src/Main.elm --optimize --output Main.js
-
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+
+      - name: Build Elm UI
+        run: cd ui; elm make src/Main.elm --optimize --output Main.js
+
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
