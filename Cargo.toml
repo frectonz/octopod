@@ -37,12 +37,3 @@ install-path = "CARGO_HOME"
 allow-dirty = ["ci"]
 # Whether to install an updater program
 install-updater = true
-
-[workspace.metadata.dist.dependencies.homebrew]
-elm = '*'
-
-[workspace.metadata.dist.dependencies.apt]
-elm-compiler = '*'
-
-[workspace.metadata.dist.dependencies.chocolatey]
-elm-platform = '*'
