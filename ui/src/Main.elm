@@ -11,7 +11,7 @@ import Url
 -- MAIN
 
 
-main : Program () Model Msg
+main : Program Metadata Model Msg
 main =
     Browser.application
         { init = init
@@ -30,12 +30,19 @@ main =
 type alias Model =
     { key : Nav.Key
     , url : Url.Url
+    , meta : Metadata
     }
 
 
-init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init flags url key =
-    ( Model key url, Cmd.none )
+type alias Metadata =
+    { version : String
+    , registryUrl : String
+    }
+
+
+init : Metadata -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init meta url key =
+    ( Model key url meta, Cmd.none )
 
 
 
@@ -81,33 +88,33 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "Octopod"
     , body =
-        [ viewHeader
-        , viewConnectionStatus
+        [ viewHeader model.meta.version
+        , viewConnectionStatus model.meta.registryUrl
         , viewRepositories
         ]
     }
 
 
-viewHeader : Html msg
-viewHeader =
+viewHeader : String -> Html msg
+viewHeader version =
     header [ class "header" ]
         [ div [ class "header__main" ]
             [ img [ src "/statics/logo.svg", class "header__logo" ] []
             , h1 [ class "header__title" ] [ text "Octopod" ]
             ]
         , div [ class "header__nav" ]
-            [ p [] [ text "[0.1.0]" ]
+            [ p [] [ text ("[" ++ version ++ "]") ]
             , a [ href "https://github.com/frectonz/octopod" ] [ img [ src "/statics/github.svg" ] [] ]
             ]
         ]
 
 
-viewConnectionStatus : Html msg
-viewConnectionStatus =
+viewConnectionStatus : String -> Html msg
+viewConnectionStatus registryUrl =
     section [ class "status" ]
         [ div [ class "status__registry" ]
             [ img [ src "/statics/radio.svg" ] []
-            , p [] [ text "Connected to http://164.160.187.161:4003" ]
+            , p [] [ text ("Connected to " ++ registryUrl) ]
             ]
         , div [ class "status__repositories" ]
             [ img [ src "/statics/boxes.svg" ] []

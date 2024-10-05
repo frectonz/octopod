@@ -7,6 +7,9 @@
   <link rel="icon" href="/statics/logo.svg" type="image/svg+xml">
   <title>Octopod</title>
 
+  <!-- VERSION -->
+  <!-- REGISTRY_URL -->
+
   <link rel="stylesheet" href="/statics/reset.css">
   <style>
     * {
@@ -68,7 +71,14 @@
 
 <body>
   <script src="/Main.js"></script>
-  <script>Elm.Main.init();</script>
+  <script>
+    Elm.Main.init({
+      flags: {
+        version: document.querySelector(`meta[name="VERSION"]`).content,
+        registryUrl: document.querySelector(`meta[name="REGISTRY_URL"]`).content
+      }
+    });
+  </script>
 </body>
 
 </html>

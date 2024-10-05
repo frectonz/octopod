@@ -52,13 +52,15 @@ async fn main() -> color_eyre::Result<()> {
 
     let args = Arguments::parse();
 
+    let index_html = statics::get_index_html(&args.registry_url);
+
     let fetcher = Fetcher::new(args.registry_url, args.registry_credentials);
     fetcher.check_auth().await?;
 
     let routes = statics::main_js()
         .or(statics::files())
         .or(api::hander(fetcher))
-        .or(statics::index_html());
+        .or(statics::index_html(index_html));
 
     let address = args.address.parse::<std::net::SocketAddr>()?;
     warp::serve(routes).run(address).await;
@@ -78,16 +80,31 @@ mod statics {
         Filter,
     };
 
-    pub fn index_html(
-    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    pub fn get_index_html(registry_url: &str) -> String {
         const INDEX_HTML: &str = include_str!("../ui/index.html");
 
-        warp::get().map(|| {
-            Response::builder()
-                .header(CONTENT_TYPE, "text/html")
-                .body(INDEX_HTML)
-                .unwrap()
-        })
+        let version = format!(
+            r#"<meta name="VERSION" content="{}" />"#,
+            env!("CARGO_PKG_VERSION")
+        );
+        let registry_url = format!(r#"<meta name="REGISTRY_URL" content="{}" />"#, registry_url);
+
+        INDEX_HTML
+            .replace("<!-- VERSION -->", &version)
+            .replace("<!-- REGISTRY_URL -->", &registry_url)
+    }
+
+    pub fn index_html(
+        page: String,
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::any().map(move || page.clone()))
+            .map(|contents| {
+                Response::builder()
+                    .header(CONTENT_TYPE, "text/html")
+                    .body(contents)
+                    .unwrap()
+            })
     }
 
     pub fn main_js() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
