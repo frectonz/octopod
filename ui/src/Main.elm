@@ -1,10 +1,12 @@
-module Main exposing (Model, Msg(..), init, main, subscriptions, update, view, viewLink)
+module Main exposing (..)
 
 import Browser
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Url
+import Http
+import Json.Decode as Decode exposing (Decoder)
+import Url exposing (Protocol(..))
 
 
 
@@ -31,6 +33,7 @@ type alias Model =
     { key : Nav.Key
     , url : Url.Url
     , meta : Metadata
+    , catalog : RemoteData Catalog
     }
 
 
@@ -40,9 +43,20 @@ type alias Metadata =
     }
 
 
+type RemoteData value
+    = Failure
+    | Loading
+    | Success value
+
+
+type alias Catalog =
+    { repositories : List String
+    }
+
+
 init : Metadata -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init meta url key =
-    ( Model key url meta, Cmd.none )
+    ( Model key url meta Loading, getCatalog )
 
 
 
@@ -52,6 +66,7 @@ init meta url key =
 type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
+    | GotCatalog (Result Http.Error Catalog)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -69,6 +84,14 @@ update msg model =
             ( { model | url = url }
             , Cmd.none
             )
+
+        GotCatalog result ->
+            case result of
+                Ok catalog ->
+                    ( { model | catalog = Success catalog }, Cmd.none )
+
+                Err _ ->
+                    ( { model | catalog = Failure }, Cmd.none )
 
 
 
@@ -89,9 +112,10 @@ view model =
     { title = "Octopod"
     , body =
         [ viewHeader model.meta.version
-        , viewConnectionStatus model.meta.registryUrl
-        , viewRepositories
+        , viewConnectionStatus model.meta.registryUrl model.catalog
+        , viewRepositoriesTitle
         ]
+            ++ viewRepositories model.catalog
     }
 
 
@@ -109,8 +133,8 @@ viewHeader version =
         ]
 
 
-viewConnectionStatus : String -> Html msg
-viewConnectionStatus registryUrl =
+viewConnectionStatus : String -> RemoteData Catalog -> Html msg
+viewConnectionStatus registryUrl data =
     section [ class "status" ]
         [ div [ class "status__registry" ]
             [ img [ src "/statics/radio.svg" ] []
@@ -118,18 +142,61 @@ viewConnectionStatus registryUrl =
             ]
         , div [ class "status__repositories" ]
             [ img [ src "/statics/boxes.svg" ] []
-            , p [] [ text "Found 10 repositories" ]
+            , p []
+                [ text
+                    (case data of
+                        Success catalog ->
+                            "Found " ++ (catalog.repositories |> List.length |> String.fromInt) ++ " repositories"
+
+                        _ ->
+                            ""
+                    )
+                ]
             ]
         ]
 
 
-viewRepositories : Html msg
-viewRepositories =
+viewRepositoriesTitle : Html msg
+viewRepositoriesTitle =
     section [ class "repositories__title" ]
         [ h1 [] [ text "Repositories" ]
         ]
 
 
-viewLink : String -> Html msg
-viewLink path =
-    li [] [ a [ href path ] [ text path ] ]
+viewRepositories : RemoteData Catalog -> List (Html msg)
+viewRepositories data =
+    case data of
+        Loading ->
+            [ section [ class "loading__title" ] [ h1 [] [ text "Loading..." ] ] ]
+
+        Failure ->
+            [ section [ class "failure__title" ] [ h1 [] [ text "Something went wrong" ] ] ]
+
+        Success catalog ->
+            catalog.repositories
+                |> List.map
+                    (\repo ->
+                        section [ class "repo" ]
+                            [ div [] [ img [ src "/statics/box.svg" ] [] ]
+                            , div [] [ h1 [] [ a [ href ("/repos/" ++ repo) ] [ text repo ] ] ]
+                            , div [] [ img [ src "statics/move-up-right.svg" ] [] ]
+                            ]
+                    )
+
+
+
+-- HTTP
+
+
+getCatalog : Cmd Msg
+getCatalog =
+    Http.get
+        { url = "/api/v2/_catalog"
+        , expect = Http.expectJson GotCatalog decodeCatalog
+        }
+
+
+decodeCatalog : Decoder Catalog
+decodeCatalog =
+    Decode.map Catalog
+        (Decode.field "repositories" (Decode.list Decode.string))
