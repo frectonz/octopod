@@ -1,13 +1,74 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/statics/logo.svg" type="image/svg+xml">
-    <title>Octopod</title>
-  </head>
-  <body>
-    <script src="/Main.js"></script>
-    <script>Elm.Main.init();</script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/statics/logo.svg" type="image/svg+xml">
+  <title>Octopod</title>
+
+  <link rel="stylesheet" href="/statics/reset.css">
+  <style>
+    * {
+      font-family: monospace;
+    }
+
+    .header {
+      display: grid;
+      grid-template-columns: 90% 10%;
+      border-bottom: 2px solid black;
+    }
+
+    .header>div {
+      display: flex;
+      gap: 1rem;
+      padding: 2rem;
+      align-items: center;
+    }
+
+    .header__main {
+      border-right: 2px solid black;
+    }
+
+    .header__nav {
+      justify-content: space-around;
+    }
+
+    .header__logo {
+      width: 3%;
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: 70% 30%;
+      border-bottom: 2px solid black;
+    }
+
+    .status>div {
+      padding: 2rem;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .status>div>img {}
+
+    .status__registry {
+      border-right: 2px solid black;
+      background-color: #86efac;
+    }
+
+    .repositories__title {
+      padding: 2rem;
+      font-size: 5rem;
+      border-bottom: 2px solid black;
+    }
+  </style>
+</head>
+
+<body>
+  <script src="/Main.js"></script>
+  <script>Elm.Main.init();</script>
+</body>
+
 </html>

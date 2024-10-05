@@ -31,6 +31,7 @@
             pkgs.elmPackages.elm-format
             pkgs.rust-bin.stable.latest.default
             pkgs.elmPackages.elm-language-server
+            pkgs.nodePackages.vscode-langservers-extracted
 
             (pkgs.writeShellApplication {
               name = "run";

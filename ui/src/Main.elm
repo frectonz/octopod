@@ -79,20 +79,48 @@ subscriptions _ =
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "URL Interceptor"
+    { title = "Octopod"
     , body =
-        [ img [ src "/statics/logo.svg" ] []
-        , h1 [] [ text "The current URL is: " ]
-        , b [] [ text (Url.toString model.url) ]
-        , ul []
-            [ viewLink "/home"
-            , viewLink "/profile"
-            , viewLink "/reviews/the-century-of-the-self"
-            , viewLink "/reviews/public-opinion"
-            , viewLink "/reviews/shah-of-shahs"
-            ]
+        [ viewHeader
+        , viewConnectionStatus
+        , viewRepositories
         ]
     }
+
+
+viewHeader : Html msg
+viewHeader =
+    header [ class "header" ]
+        [ div [ class "header__main" ]
+            [ img [ src "/statics/logo.svg", class "header__logo" ] []
+            , h1 [ class "header__title" ] [ text "Octopod" ]
+            ]
+        , div [ class "header__nav" ]
+            [ p [] [ text "[0.1.0]" ]
+            , a [ href "https://github.com/frectonz/octopod" ] [ img [ src "/statics/github.svg" ] [] ]
+            ]
+        ]
+
+
+viewConnectionStatus : Html msg
+viewConnectionStatus =
+    section [ class "status" ]
+        [ div [ class "status__registry" ]
+            [ img [ src "/statics/radio.svg" ] []
+            , p [] [ text "Connected to http://164.160.187.161:4003" ]
+            ]
+        , div [ class "status__repositories" ]
+            [ img [ src "/statics/boxes.svg" ] []
+            , p [] [ text "Found 10 repositories" ]
+            ]
+        ]
+
+
+viewRepositories : Html msg
+viewRepositories =
+    section [ class "repositories__title" ]
+        [ h1 [] [ text "Repositories" ]
+        ]
 
 
 viewLink : String -> Html msg
