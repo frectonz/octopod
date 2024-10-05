@@ -6,7 +6,9 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder)
-import Url exposing (Protocol(..))
+import Url exposing (Protocol(..), Url)
+import Url.Parser as Parser exposing ((<?>), Parser)
+import Url.Parser.Query as Query
 
 
 
@@ -31,9 +33,8 @@ main =
 
 type alias Model =
     { key : Nav.Key
-    , url : Url.Url
     , meta : Metadata
-    , catalog : RemoteData Catalog
+    , page : Page
     }
 
 
@@ -41,6 +42,16 @@ type alias Metadata =
     { version : String
     , registryUrl : String
     }
+
+
+type Route
+    = Index
+    | Repo (Maybe String)
+
+
+type Page
+    = HomePage (RemoteData Catalog)
+    | SingleRepoPage String (RemoteData Repository)
 
 
 type RemoteData value
@@ -54,9 +65,41 @@ type alias Catalog =
     }
 
 
+type alias Repository =
+    { name : String
+    , tags : List String
+    }
+
+
 init : Metadata -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init meta url key =
-    ( Model key url meta Loading, getCatalog )
+    let
+        route =
+            parseUrl url
+    in
+    ( { key = key
+      , meta = meta
+      , page =
+            case route of
+                Index ->
+                    HomePage Loading
+
+                Repo Nothing ->
+                    HomePage Loading
+
+                Repo (Just name) ->
+                    SingleRepoPage name Loading
+      }
+    , case route of
+        Index ->
+            getCatalog
+
+        Repo Nothing ->
+            getCatalog
+
+        Repo (Just name) ->
+            getRepo name
+    )
 
 
 
@@ -67,31 +110,45 @@ type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
     | GotCatalog (Result Http.Error Catalog)
+    | GotRepository (Result Http.Error Repository)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        LinkClicked urlRequest ->
+    case ( msg, model.page ) of
+        ( LinkClicked urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( model, Nav.pushUrl model.key (Url.toString url) )
+                    let
+                        ( newModel, newCmd ) =
+                            init model.meta url model.key
+                    in
+                    ( newModel, Cmd.batch [ Nav.pushUrl model.key (Url.toString url), newCmd ] )
 
                 Browser.External href ->
                     ( model, Nav.load href )
 
-        UrlChanged url ->
-            ( { model | url = url }
-            , Cmd.none
-            )
+        ( UrlChanged _, _ ) ->
+            ( model, Cmd.none )
 
-        GotCatalog result ->
+        ( GotCatalog result, HomePage _ ) ->
             case result of
                 Ok catalog ->
-                    ( { model | catalog = Success catalog }, Cmd.none )
+                    ( { model | page = HomePage (Success catalog) }, Cmd.none )
 
                 Err _ ->
-                    ( { model | catalog = Failure }, Cmd.none )
+                    ( { model | page = HomePage Failure }, Cmd.none )
+
+        ( GotRepository result, SingleRepoPage name _ ) ->
+            case result of
+                Ok repo ->
+                    ( { model | page = SingleRepoPage name (Success repo) }, Cmd.none )
+
+                Err _ ->
+                    ( { model | page = SingleRepoPage name Failure }, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
 
 
 
@@ -109,13 +166,30 @@ subscriptions _ =
 
 view : Model -> Browser.Document Msg
 view model =
+    let
+        stat =
+            case model.page of
+                HomePage (Success catalog) ->
+                    "Found " ++ (catalog.repositories |> List.length |> String.fromInt) ++ " repositories"
+
+                SingleRepoPage _ (Success repo) ->
+                    "Found " ++ (repo.tags |> List.length |> String.fromInt) ++ " tags"
+
+                _ ->
+                    ""
+    in
     { title = "Octopod"
     , body =
         [ viewHeader model.meta.version
-        , viewConnectionStatus model.meta.registryUrl model.catalog
-        , viewRepositoriesTitle
+        , viewStat model.meta.registryUrl stat
         ]
-            ++ viewRepositories model.catalog
+            ++ (case model.page of
+                    HomePage data ->
+                        viewHomePage data
+
+                    SingleRepoPage name data ->
+                        viewSingleRepoPage name data
+               )
     }
 
 
@@ -133,8 +207,8 @@ viewHeader version =
         ]
 
 
-viewConnectionStatus : String -> RemoteData Catalog -> Html msg
-viewConnectionStatus registryUrl data =
+viewStat : String -> String -> Html msg
+viewStat registryUrl stat =
     section [ class "status" ]
         [ div [ class "status__registry" ]
             [ img [ src "/statics/radio.svg" ] []
@@ -142,25 +216,22 @@ viewConnectionStatus registryUrl data =
             ]
         , div [ class "status__repositories" ]
             [ img [ src "/statics/boxes.svg" ] []
-            , p []
-                [ text
-                    (case data of
-                        Success catalog ->
-                            "Found " ++ (catalog.repositories |> List.length |> String.fromInt) ++ " repositories"
-
-                        _ ->
-                            ""
-                    )
-                ]
+            , p [] [ text stat ]
             ]
         ]
 
 
-viewRepositoriesTitle : Html msg
-viewRepositoriesTitle =
+viewPageTitle : String -> Html msg
+viewPageTitle title =
     section [ class "repositories__title" ]
-        [ h1 [] [ text "Repositories" ]
+        [ h1 [] [ text title ]
         ]
+
+
+viewHomePage : RemoteData Catalog -> List (Html msg)
+viewHomePage data =
+    viewPageTitle "Repositories"
+        :: viewRepositories data
 
 
 viewRepositories : RemoteData Catalog -> List (Html msg)
@@ -178,8 +249,35 @@ viewRepositories data =
                     (\repo ->
                         section [ class "repo" ]
                             [ div [] [ img [ src "/statics/box.svg" ] [] ]
-                            , div [] [ h1 [] [ a [ href ("/repos/" ++ repo) ] [ text repo ] ] ]
-                            , div [] [ img [ src "statics/move-up-right.svg" ] [] ]
+                            , div [] [ h1 [] [ a [ href ("/repos?r=" ++ repo) ] [ text repo ] ] ]
+                            , div [] [ img [ src "/statics/move-up-right.svg" ] [] ]
+                            ]
+                    )
+
+
+viewSingleRepoPage : String -> RemoteData Repository -> List (Html msg)
+viewSingleRepoPage name data =
+    viewPageTitle name
+        :: viewRepoDetails data
+
+
+viewRepoDetails : RemoteData Repository -> List (Html msg)
+viewRepoDetails data =
+    case data of
+        Loading ->
+            [ section [ class "loading__title" ] [ h1 [] [ text "Loading..." ] ] ]
+
+        Failure ->
+            [ section [ class "failure__title" ] [ h1 [] [ text "Something went wrong" ] ] ]
+
+        Success repo ->
+            repo.tags
+                |> List.map
+                    (\tag ->
+                        section [ class "repo" ]
+                            [ div [] [ img [ src "/statics/tag.svg" ] [] ]
+                            , div [] [ h1 [] [ a [ href "" ] [ text tag ] ] ]
+                            , div [] [ img [ src "/statics/move-up-right.svg" ] [] ]
                             ]
                     )
 
@@ -200,3 +298,40 @@ decodeCatalog : Decoder Catalog
 decodeCatalog =
     Decode.map Catalog
         (Decode.field "repositories" (Decode.list Decode.string))
+
+
+getRepo : String -> Cmd Msg
+getRepo repo =
+    Http.get
+        { url = "/api/v2/" ++ repo ++ "/tags/list"
+        , expect = Http.expectJson GotRepository decodeRepo
+        }
+
+
+decodeRepo : Decoder Repository
+decodeRepo =
+    Decode.map2 Repository
+        (Decode.field "name" Decode.string)
+        (Decode.field "tags" (Decode.list Decode.string))
+
+
+
+-- ROUTES
+
+
+parseUrl : Url -> Route
+parseUrl url =
+    case Parser.parse routeParser url of
+        Just route ->
+            route
+
+        Nothing ->
+            Index
+
+
+routeParser : Parser (Route -> c) c
+routeParser =
+    Parser.oneOf
+        [ Parser.map Index Parser.top
+        , Parser.map Repo (Parser.s "repos" <?> Query.string "r")
+        ]
