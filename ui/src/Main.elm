@@ -186,13 +186,20 @@ subscriptions _ =
 view : Model -> Browser.Document Msg
 view model =
     let
+        pluralize singular plural num =
+            if num == 1 then
+                singular
+
+            else
+                plural
+
         stat =
             case model.page of
                 HomePage (Success catalog) ->
-                    "Found " ++ (catalog.repositories |> List.length |> String.fromInt) ++ " repositories"
+                    "Found " ++ (catalog.repositories |> List.length |> String.fromInt) ++ pluralize " repository" " repositories" (catalog.repositories |> List.length)
 
                 SingleRepoPage _ (Success repo) ->
-                    "Found " ++ (repo.tags |> List.length |> String.fromInt) ++ " tags"
+                    "Found " ++ (repo.tags |> List.length |> String.fromInt) ++ pluralize " tag" " tags" (repo.tags |> List.length)
 
                 _ ->
                     ""
