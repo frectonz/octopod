@@ -2,7 +2,7 @@
 name = "octopod"
 version = "0.1.0"
 edition = "2021"
-description = "Simple UI for Docker Registries"
+description = "A UI for Docker Registries"
 
 [dependencies]
 clap = { version = "4.5.19", features = ["derive", "env"] }
