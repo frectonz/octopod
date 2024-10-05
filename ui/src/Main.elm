@@ -128,8 +128,27 @@ update msg model =
                 Browser.External href ->
                     ( model, Nav.load href )
 
-        ( UrlChanged _, _ ) ->
-            ( model, Cmd.none )
+        ( UrlChanged url, page ) ->
+            let
+                route =
+                    parseUrl url
+
+                pageChanged =
+                    case ( route, page ) of
+                        ( Index, HomePage _ ) ->
+                            False
+
+                        ( Repo _, SingleRepoPage _ _ ) ->
+                            False
+
+                        _ ->
+                            True
+            in
+            if pageChanged then
+                init model.meta url model.key
+
+            else
+                ( model, Cmd.none )
 
         ( GotCatalog result, HomePage _ ) ->
             case result of
@@ -198,7 +217,7 @@ viewHeader version =
     header [ class "header" ]
         [ div [ class "header__main" ]
             [ img [ src "/statics/logo.svg", class "header__logo" ] []
-            , h1 [ class "header__title" ] [ text "Octopod" ]
+            , h1 [ class "header__title" ] [ a [ href "/" ] [ text "Octopod" ] ]
             ]
         , div [ class "header__nav" ]
             [ p [] [ text ("[" ++ version ++ "]") ]
@@ -223,7 +242,7 @@ viewStat registryUrl stat =
 
 viewPageTitle : String -> Html msg
 viewPageTitle title =
-    section [ class "repositories__title" ]
+    section [ class "page__title" ]
         [ h1 [] [ text title ]
         ]
 
