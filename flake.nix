@@ -26,6 +26,7 @@
             pkgs.hurl
             pkgs.elm2nix
             pkgs.watchexec
+            pkgs.cargo-dist
             pkgs.rust-analyzer
             pkgs.elmPackages.elm
             pkgs.elmPackages.elm-format
