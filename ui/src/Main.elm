@@ -54,7 +54,7 @@ type Route
 type Page
     = HomePage (RemoteData Catalog)
     | SingleRepoPage String (RemoteData Repository)
-    | ImagePage String (RemoteData Image)
+    | ImagePage String String (RemoteData Image) (RemoteData ImageBlob)
 
 
 type RemoteData value
@@ -89,6 +89,13 @@ type alias ImageDigest =
     }
 
 
+type alias ImageBlob =
+    { architecture : String
+    , os : String
+    , cmd : List String
+    }
+
+
 init : Metadata -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init meta url key =
     let
@@ -106,7 +113,7 @@ init meta url key =
                     SingleRepoPage name Loading
 
                 Tag (Just repo) (Just tag) ->
-                    ImagePage (repo ++ ":" ++ tag) Loading
+                    ImagePage repo tag Loading Loading
 
                 _ ->
                     HomePage Loading
@@ -136,6 +143,7 @@ type Msg
     | GotCatalog (Result Http.Error Catalog)
     | GotRepository (Result Http.Error Repository)
     | GotImage (Result Http.Error Image)
+    | GotImageBlob (Result Http.Error ImageBlob)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -166,7 +174,7 @@ update msg model =
                         ( Repo _, SingleRepoPage _ _ ) ->
                             False
 
-                        ( Tag _ _, ImagePage _ _ ) ->
+                        ( Tag _ _, ImagePage _ _ _ _ ) ->
                             False
 
                         _ ->
@@ -194,13 +202,21 @@ update msg model =
                 Err _ ->
                     ( { model | page = SingleRepoPage name Failure }, Cmd.none )
 
-        ( GotImage result, ImagePage name _ ) ->
+        ( GotImage result, ImagePage repo tag _ blob ) ->
             case result of
                 Ok image ->
-                    ( { model | page = ImagePage name (Success image) }, Cmd.none )
+                    ( { model | page = ImagePage repo tag (Success image) blob }, getImageBlob repo image.config.digest )
 
                 Err _ ->
-                    ( { model | page = ImagePage name Failure }, Cmd.none )
+                    ( { model | page = ImagePage repo tag Failure blob }, Cmd.none )
+
+        ( GotImageBlob result, ImagePage repo tag imageData _ ) ->
+            case result of
+                Ok blob ->
+                    ( { model | page = ImagePage repo tag imageData (Success blob) }, Cmd.none )
+
+                Err _ ->
+                    ( { model | page = ImagePage repo tag imageData Failure }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -237,7 +253,7 @@ view model =
                 SingleRepoPage _ (Success repo) ->
                     "Found " ++ (repo.tags |> List.length |> String.fromInt) ++ pluralize " tag" " tags" (repo.tags |> List.length)
 
-                ImagePage _ (Success image) ->
+                ImagePage _ _ (Success image) _ ->
                     "Found " ++ (image.layers |> List.length |> String.fromInt) ++ pluralize " layer" " layers" (image.layers |> List.length)
 
                 _ ->
@@ -255,8 +271,8 @@ view model =
                     SingleRepoPage name data ->
                         viewSingleRepoPage name data
 
-                    ImagePage name data ->
-                        viewImagePage name data
+                    ImagePage repo tag data blob ->
+                        viewImagePage (repo ++ ":" ++ tag) data blob
                )
     }
 
@@ -350,14 +366,14 @@ viewRepoDetails data =
                     )
 
 
-viewImagePage : String -> RemoteData Image -> List (Html msg)
-viewImagePage name data =
+viewImagePage : String -> RemoteData Image -> RemoteData ImageBlob -> List (Html msg)
+viewImagePage name data blob =
     viewPageTitle name
-        :: viewImageDetail data
+        :: viewImageDetail data blob
 
 
-viewImageDetail : RemoteData Image -> List (Html msg)
-viewImageDetail data =
+viewImageDetail : RemoteData Image -> RemoteData ImageBlob -> List (Html msg)
+viewImageDetail data blob =
     case data of
         Loading ->
             [ section [ class "loading__title" ] [ h1 [] [ text "Loading..." ] ] ]
@@ -384,15 +400,38 @@ viewImageDetail data =
                            )
                     )
                 , div [ class "metadata" ]
-                    [ div []
+                    ([ div []
                         [ h2 [] [ text "Image Digest" ]
                         , p [] [ text image.config.digest ]
                         ]
-                    , div []
+                     , div []
                         [ h2 [] [ text "Image Size" ]
                         , p [] [ size |> Filesize.format |> text ]
                         ]
-                    ]
+                     ]
+                        ++ (case blob of
+                                Loading ->
+                                    []
+
+                                Failure ->
+                                    []
+
+                                Success blobData ->
+                                    [ div []
+                                        [ h2 [] [ text "Architecture" ]
+                                        , p [] [ text blobData.architecture ]
+                                        ]
+                                    , div []
+                                        [ h2 [] [ text "OS" ]
+                                        , p [] [ text blobData.os ]
+                                        ]
+                                    , div []
+                                        [ h2 [] [ text "CMD" ]
+                                        , p [] [ blobData.cmd |> String.join " " |> text ]
+                                        ]
+                                    ]
+                           )
+                    )
                 ]
             ]
 
@@ -453,6 +492,22 @@ decodeImageDigest =
         (Decode.field "digest" Decode.string)
         (Decode.field "mediaType" Decode.string)
         (Decode.field "size" Decode.int)
+
+
+getImageBlob : String -> String -> Cmd Msg
+getImageBlob repo blobDigest =
+    Http.get
+        { url = "/api/v2/" ++ repo ++ "/blobs/" ++ blobDigest
+        , expect = Http.expectJson GotImageBlob decodeImageBlob
+        }
+
+
+decodeImageBlob : Decoder ImageBlob
+decodeImageBlob =
+    Decode.map3 ImageBlob
+        (Decode.field "architecture" Decode.string)
+        (Decode.field "os" Decode.string)
+        (Decode.field "config" (Decode.field "Cmd" (Decode.list Decode.string)))
 
 
 
