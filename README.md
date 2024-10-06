@@ -20,6 +20,26 @@ Options:
           Print version
 ```
 
+## Install
+
+## Linux and MacOS
+
+```
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/frectonz/octopod/releases/download/0.1.1/octopod-installer.sh | sh
+```
+
+## Windows
+
+```
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/frectonz/octopod/releases/download/0.1.1/octopod-installer.ps1 | iex"
+```
+
+### Nix
+
+```
+nix run github:frectonz/octopod
+```
+
 ## Screenshots
 
 #### Repositories Page
