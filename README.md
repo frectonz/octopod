@@ -19,3 +19,14 @@ Options:
   -V, --version
           Print version
 ```
+
+## Screenshots
+
+#### Repositories Page
+![repositories](./screenshots/1.png)
+
+#### Tags Page
+![tags](./screenshots/2.png)
+
+#### Image Page
+![image](./screenshots/3.png)
