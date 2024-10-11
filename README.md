@@ -20,6 +20,16 @@ Options:
           Print version
 ```
 
+## Run it with Docker
+
+```
+docker run -p 3030:3030 \
+      -e ADDRESS="0.0.0.0:3030" \
+      -e REGISTRY_URL="<registry_url>" \
+      -e REGISTRY_CREDENTIALS="<username>:<password>" \
+      frectonz/octopod
+```
+
 ## Install
 
 ### Linux and MacOS

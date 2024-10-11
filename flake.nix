@@ -50,10 +50,12 @@
             cargo = pkgs.rust-bin.stable.latest.default;
             rustc = pkgs.rust-bin.stable.latest.default;
           };
-        in {
+
+          pname = "octopod";
+          version = "0.1.1";
+        in rec {
           default = rustPlatform.buildRustPackage {
-            pname = "octopod";
-            version = "0.1.0";
+            inherit pname version;
             src = ./.;
 
             preBuild = ''
@@ -62,6 +64,18 @@
 
             cargoLock.lockFile = ./Cargo.lock;
           };
+
+          image = pkgs.dockerTools.buildLayeredImage {
+            name = pname;
+            tag = "latest";
+            created = "now";
+            config.Cmd = [ "${default}/bin/octopod" ];
+          };
+
+          deploy = pkgs.writeShellScriptBin "deploy" ''
+            ${pkgs.skopeo}/bin/skopeo --insecure-policy copy docker-archive:${image} docker://docker.io/frectonz/octopod:${version} --dest-creds="frectonz:$ACCESS_TOKEN"
+            ${pkgs.skopeo}/bin/skopeo --insecure-policy copy docker://docker.io/frectonz/octopod:${version} docker://docker.io/frectonz/octopod:latest --dest-creds="frectonz:$ACCESS_TOKEN"
+          '';
         });
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt-classic);
