@@ -2,11 +2,14 @@ module Main exposing (..)
 
 import Browser
 import Browser.Navigation as Nav
+import DateFormat
 import Filesize
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
+import Iso8601
 import Json.Decode as Decode exposing (Decoder)
+import Time exposing (Posix)
 import Url exposing (Protocol(..), Url)
 import Url.Parser as Parser exposing ((<?>), Parser)
 import Url.Parser.Query as Query
@@ -93,6 +96,7 @@ type alias ImageBlob =
     { architecture : String
     , os : String
     , cmd : List String
+    , createdAt : String
     }
 
 
@@ -422,6 +426,10 @@ viewImageDetail data blob =
                                         , p [] [ text blobData.architecture ]
                                         ]
                                     , div []
+                                        [ h2 [] [ text "Created At" ]
+                                        , p [] [ text blobData.createdAt ]
+                                        ]
+                                    , div []
                                         [ h2 [] [ text "OS" ]
                                         , p [] [ text blobData.os ]
                                         ]
@@ -504,10 +512,11 @@ getImageBlob repo blobDigest =
 
 decodeImageBlob : Decoder ImageBlob
 decodeImageBlob =
-    Decode.map3 ImageBlob
+    Decode.map4 ImageBlob
         (Decode.field "architecture" Decode.string)
         (Decode.field "os" Decode.string)
         (Decode.field "config" (Decode.field "Cmd" (Decode.list Decode.string)))
+        (Decode.field "created" (Iso8601.decoder |> Decode.map dateFormatter))
 
 
 
@@ -531,3 +540,25 @@ routeParser =
         , Parser.map Repo (Parser.s "repos" <?> Query.string "r")
         , Parser.map Tag (Parser.s "tags" <?> Query.string "r" <?> Query.string "t")
         ]
+
+
+
+-- DATE FORMATTER
+
+
+dateFormatter : Posix -> String
+dateFormatter =
+    DateFormat.format
+        [ DateFormat.monthNameFull
+        , DateFormat.text " "
+        , DateFormat.dayOfMonthSuffix
+        , DateFormat.text ", "
+        , DateFormat.yearNumber
+        , DateFormat.text " "
+        , DateFormat.hourFixed
+        , DateFormat.text ":"
+        , DateFormat.minuteFixed
+        , DateFormat.text ":"
+        , DateFormat.secondFixed
+        ]
+        Time.utc
