@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use clap::Parser;
 use fetcher::Fetcher;
 use warp::Filter;
@@ -9,11 +7,11 @@ use warp::Filter;
 struct Arguments {
     /// The address to bind to.
     #[arg(long, env, default_value = "127.0.0.1:3030")]
-    address: Arc<str>,
+    address: Box<str>,
 
     /// Registry URL to connect to. Example [http://127.0.0.1:3030]
     #[arg(long, env)]
-    registry_url: Arc<str>,
+    registry_url: Box<str>,
 
     /// Registry username and password separated with a colon. Example [username:password]
     #[arg(long, env)]
@@ -22,8 +20,8 @@ struct Arguments {
 
 #[derive(Debug, Clone)]
 struct Credentials {
-    username: Arc<str>,
-    password: Arc<str>,
+    username: Box<str>,
+    password: Box<str>,
 }
 
 impl std::str::FromStr for Credentials {
@@ -35,8 +33,8 @@ impl std::str::FromStr for Credentials {
             return Err("credentials must be in the format 'username:password'".to_string());
         }
         Ok(Credentials {
-            username: Arc::from(parts[0]),
-            password: Arc::from(parts[1]),
+            username: Box::from(parts[0]),
+            password: Box::from(parts[1]),
         })
     }
 }
@@ -155,8 +153,6 @@ mod statics {
 }
 
 mod fetcher {
-    use std::sync::Arc;
-
     use reqwest::Client;
 
     use crate::Credentials;
@@ -164,7 +160,7 @@ mod fetcher {
     #[derive(Clone)]
     pub struct Fetcher {
         client: Client,
-        url: Arc<str>,
+        url: Box<str>,
         auth: Option<Credentials>,
     }
 
@@ -172,7 +168,7 @@ mod fetcher {
         pub fn new(url: &str, auth: Option<Credentials>) -> Self {
             Self {
                 client: Client::new(),
-                url: Arc::from(url),
+                url: Box::from(url),
                 auth,
             }
         }
