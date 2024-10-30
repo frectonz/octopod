@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use clap::Parser;
 use fetcher::Fetcher;
 use warp::Filter;
@@ -7,11 +9,11 @@ use warp::Filter;
 struct Arguments {
     /// The address to bind to.
     #[arg(long, env, default_value = "127.0.0.1:3030")]
-    address: String,
+    address: Arc<str>,
 
     /// Registry URL to connect to. Example [http://127.0.0.1:3030]
     #[arg(long, env)]
-    registry_url: String,
+    registry_url: Arc<str>,
 
     /// Registry username and password separated with a colon. Example [username:password]
     #[arg(long, env)]
@@ -20,8 +22,8 @@ struct Arguments {
 
 #[derive(Debug, Clone)]
 struct Credentials {
-    username: String,
-    password: String,
+    username: Arc<str>,
+    password: Arc<str>,
 }
 
 impl std::str::FromStr for Credentials {
@@ -33,8 +35,8 @@ impl std::str::FromStr for Credentials {
             return Err("credentials must be in the format 'username:password'".to_string());
         }
         Ok(Credentials {
-            username: parts[0].to_string(),
-            password: parts[1].to_string(),
+            username: Arc::from(parts[0]),
+            password: Arc::from(parts[1]),
         })
     }
 }
@@ -54,7 +56,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let index_html = statics::get_index_html(&args.registry_url);
 
-    let fetcher = Fetcher::new(args.registry_url, args.registry_credentials);
+    let fetcher = Fetcher::new(&args.registry_url, args.registry_credentials);
     fetcher.check_auth().await?;
 
     let routes = statics::main_js()
@@ -153,6 +155,8 @@ mod statics {
 }
 
 mod fetcher {
+    use std::sync::Arc;
+
     use reqwest::Client;
 
     use crate::Credentials;
@@ -160,15 +164,15 @@ mod fetcher {
     #[derive(Clone)]
     pub struct Fetcher {
         client: Client,
-        url: String,
+        url: Arc<str>,
         auth: Option<Credentials>,
     }
 
     impl Fetcher {
-        pub fn new(url: String, auth: Option<Credentials>) -> Self {
+        pub fn new(url: &str, auth: Option<Credentials>) -> Self {
             Self {
                 client: Client::new(),
-                url,
+                url: Arc::from(url),
                 auth,
             }
         }
