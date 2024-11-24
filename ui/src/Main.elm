@@ -276,7 +276,7 @@ view model =
                         viewSingleRepoPage name data
 
                     ImagePage repo tag data blob ->
-                        viewImagePage (repo ++ ":" ++ tag) data blob
+                        viewImagePage model.meta.registryUrl (repo ++ ":" ++ tag) data blob
                )
     }
 
@@ -370,14 +370,14 @@ viewRepoDetails data =
                     )
 
 
-viewImagePage : String -> RemoteData Image -> RemoteData ImageBlob -> List (Html msg)
-viewImagePage name data blob =
+viewImagePage : String -> String -> RemoteData Image -> RemoteData ImageBlob -> List (Html msg)
+viewImagePage registryUrl name data blob =
     viewPageTitle name
-        :: viewImageDetail data blob
+        :: viewImageDetail registryUrl name data blob
 
 
-viewImageDetail : RemoteData Image -> RemoteData ImageBlob -> List (Html msg)
-viewImageDetail data blob =
+viewImageDetail : String -> String -> RemoteData Image -> RemoteData ImageBlob -> List (Html msg)
+viewImageDetail registryUrl name data blob =
     case data of
         Loading ->
             [ section [ class "loading__title" ] [ h1 [] [ text "Loading..." ] ] ]
@@ -405,6 +405,10 @@ viewImageDetail data blob =
                     )
                 , div [ class "metadata" ]
                     ([ div []
+                        [ h2 [] [ text "Pull Command" ]
+                        , p [] [ text ("docker pull " ++ registryUrl ++ "/" ++ name) ]
+                        ]
+                     , div []
                         [ h2 [] [ text "Image Digest" ]
                         , p [] [ text image.config.digest ]
                         ]
