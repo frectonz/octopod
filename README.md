@@ -35,13 +35,13 @@ docker run -p 3030:3030 \
 ### Linux and MacOS
 
 ```
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/frectonz/octopod/releases/download/0.1.2/octopod-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/frectonz/octopod/releases/download/0.1.3/octopod-installer.sh | sh
 ```
 
 ### Windows
 
 ```
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/frectonz/octopod/releases/download/0.1.2/octopod-installer.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/frectonz/octopod/releases/download/0.1.3/octopod-installer.ps1 | iex"
 ```
 
 ### Nix
